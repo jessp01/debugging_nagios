@@ -3,7 +3,7 @@ This repo contains materials used during my session at the Nagios World Conferen
 https://conference.nagios.com/schedule/#jportnoy
 
 ## Capture command output
-The (capture_output.pl) [capture_output.pl] script is used as a wrapper that runs the actual command, stores the STDOUT and STDERR outputs to a log file and then passes the output and RC to Nagios.
+The [capture_output.pl] (capture_output.pl) script is used as a wrapper that runs the actual command, stores the STDOUT and STDERR outputs to a log file and then passes the output and RC to Nagios.
 
 ## Trouble scenarios
 
