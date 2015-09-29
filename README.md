@@ -7,6 +7,8 @@ The [capture_output.pl] (capture_output.pl) script is used as a wrapper that run
 
 ## Trouble scenarios
 
+
+
 ### Nagios web interface fails to load
 Upon requesting the Nagios web interface, one gets 'Internal Server Error' [HTTP 500]
 - Find the Nagios Apache configuration using Apache's CLI API:
@@ -47,6 +49,8 @@ For older Apache versions, try finding the user and group with:
 ```
 # usermod -a -G nagios $APACHE_USER
 ```
+
+
 
 ### No mail alerts are recieved
 - Make sure notifications are enabled for the service
@@ -96,4 +100,73 @@ Next, we need to restart Postfix:
 # service restart postfix
 ```
 *Note that the last few commands are specific to Postfix but have parallel in other MTAs. Another alternative would have been to change the notify-service-by-email command and set the sender there but this is more global, which is usually more desirable.***
+
+
+### Host check fails cause ICMP is blocked
+In many cases, this is out of your control, in such cases, the easiest thing to do is to set an alternative command for checking that the host is alive.
+
+This can easily be done by adding this directive to the host definition:
+```
+check_command alternative_check_command
+```
+This will override the default which will typically be to use the check_ping core plugin.
+
+### Plugin fails with '(Return code of 127 is out of bounds - plugin may be missing)'
+
+
+
+
+### check_mysql plugin fails with Can't connect to MySQL server on 'mysql.host' (111) 
+- Use [capture_output.pl] (capture_output.pl) to log the command output to a file
+- Try running the command from the shell
+- On the MySQL server, check what IP/network the daemon is binded with, and what port is the listener on:
+```
+# netstat -plntu|grep mysql
+```
+In our example, the output is:
+```
+tcp        0      0 127.0.0.1:3306              0.0.0.0:\*                   LISTEN      6326/mysqld 
+```
+Meaning all connections from outside will be blocked.
+
+This needs to be correct by changing the value for bind-address in the MySQL config file.
+
+- After correcting that, use telnet/nc to see if the traffic is blocked
+- Check mysql.user table to make sure the username and host Nagios uses is allowed with:
+```
+mysql> select user,host from mysql.user;
+mysql> show grants for 'nagios_user'@'host';
+```
+In our example, the output is:
+```
++--------+-----------+
+| user   | host      |
++--------+-----------+
+| nagios | 127.0.0.1 |
++--------+-----------+
+
++---------------------------------------------------------------------------------------------------------------+
+| Grants for nagios@127.0.0.1                                                                                   |
++---------------------------------------------------------------------------------------------------------------+
+| GRANT USAGE ON *.* TO 'nagios'@'127.0.0.1' IDENTIFIED BY PASSWORD '*664299055A186321D3041F9E59595E52BC96CCA1' |
+| GRANT SELECT ON `kaltura`.* TO 'nagios'@'127.0.0.1'                                                           |
++---------------------------------------------------------------------------------------------------------------+
+
+```
+Meaning the nagios user can only connect from localhost and perform select operations on one DB called 'kaltura'.
+This needs to be corrected so that the Nagios host is allowed to connect, we can accomplish this with:
+```
+mysql> GRANT SELECT ON kaltura.* TO 'nagios'@'nagios_host' identified by 'S0ME_PassWD';
+mysql> FLUSH PRIVILEGES;
+```
+
+### check_disk plugin is failing with DISK CRITICAL - /run/user/1001/gvfs is not accessible: Permission denied 
+
+
+
+
+### SSL Certificate check shows wrong certificate
+
+
+
 
