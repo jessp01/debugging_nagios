@@ -71,3 +71,29 @@ In this example, the notification is sent using:
 # netstat -plnt|grep 25
 ```
 - Try running the command manually from the shell as the nagios user and check the MTA log for errors
+In our example, the log reveils:
+```
+Sep 29 18:26:37 jessex postfix/smtp[14645]: ECB8B120273: to=<nagios@jessex.kaltura.com>, relay=email-smtp.us-east-1.amazonaws.com[54.243.69.182]:587, delay=0.53, delays=0.02/0/0.47/0.05, dsn=5.0.0, status=bounced (host email-smtp.us-east-1.amazonaws.com[54.243.69.182] said: 501 Invalid MAIL FROM address provided (in reply to MAIL FROM command))
+```
+This is because our mail service expects the email to be sent from a specific mail address and rejects mail sent by nagios@jessex.kaltura.com.
+
+We will correct this by adding a mapping in Postfix, which is what we use as an MTA, so that emails originally sent by nagios@jessex.kaltura.com will acutally be sent using the user our service expects.
+
+First, we need to set:
+```
+smtp_generic_maps = hash:/etc/postfix/generic
+```
+In our Postfix main config file - /etc/postfix/main.cf. Then we add:
+```
+nagios@jessex.kaltura.com good@email.addr
+```
+to ```/etc/postfix/generic``` and use postmap to create a proper Postfix lookup table out of this file:
+```
+# postmap /etc/postfix/generic
+```
+Next, we need to restart Postfix:
+```
+# service restart postfix
+```
+*Note that the last few commands are specific to Postfix but have parallel in other MTAs. Another alternative would have been to change the notify-service-by-email command and set the sender there but this is more global, which is usually more desirable.***
+
