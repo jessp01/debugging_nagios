@@ -269,9 +269,11 @@ issuer=/C=US/ST=Arizona/L=Scottsdale/O=GoDaddy.com, Inc./OU=http://certs.godaddy
 ```
 
 Reason? SNI support is not the default for OpenSSL.
+
 What is SNI?
 *Server Name Indication (SNI) is an extension to the TLS computer networking protocol[1] by which a client indicates which hostname it is attempting to connect to at the start of the handshaking process.*
-That means that, when using a web server that hosts multiple domains, such as say, Apache with several VHosts, if the client does not indicate which domain it wishes to speak to, a wrong certificate may be used.
+
+This means that, when using a web server that hosts multiple domains, such as say, Apache with several VHosts, if the client does not indicate which domain it wishes to speak to, a wrong certificate may be used.
 We will therefore change our command to use SNI, like so:
 ```
 /usr/lib/nagios/plugins/check_http -H kino.kaltura.com -p 443 -S -C10 --sni
