@@ -2,9 +2,6 @@
 This repo contains materials used during my session at the Nagios World Conference 2015.
 https://conference.nagios.com/schedule/#jportnoy
 
-## Capture command output
-The [capture_output.pl] (capture_output.pl) script is used as a wrapper that runs the actual command, stores the STDOUT and STDERR outputs to a log file and then passes the output and RC to Nagios.
-
 ## Trouble scenarios
 
 
@@ -111,7 +108,30 @@ check_command alternative_check_command
 ```
 This will override the default which will typically be to use the check_ping core plugin.
 
+
+## Capture command output
+The [capture_output.pl] (capture_output.pl) script is used as a wrapper that runs the actual command, stores the STDOUT and STDERR outputs to a log file and then passes the output and RC to Nagios.
+
+If the original command's return code is bigger than 3 [UNKNOWN], 3 will be returned and the original return code will appear as part of the output.
+
+
 ### Plugin fails with '(Return code of 127 is out of bounds - plugin may be missing)'
+Nagios can only handle 0,1,2,3 as return codes, anything else will result in the output above.
+
+To debug this, lets use the [capture_output.pl] (capture_output.pl) introduced in a previous slide.
+For this example, the following command is failing:
+```
+define command{
+        command_name check_ssl_cert_bad
+        command_line   /usr/lib/nagios/plugins/check_special_http -H '$HOSTADDRESS$' -I '$HOSTADDRESS$' -C10
+}
+```
+
+We will now revise the command_line to use the capture wrapper, like so:
+define command{
+        command_name check_ssl_cert_bad
+        command_line    /usr/lib/nagios/plugins/capture_plugin.pl /usr/lib/nagios/plugins/check_special_http -H '$HOSTADDRESS$' -I '$HOSTADDRESS$' -C10
+}
 
 
 

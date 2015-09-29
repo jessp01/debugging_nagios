@@ -56,5 +56,9 @@ close (LogFile) or warn "$0: close($LOG_FILE) failed: $!" && exit UNKNOWN;
 chmod(0600,$LOG_FILE);
 
 # now return the original result to Nagios
+if ($ret_code > UNKNOWN){
+	print "Original RC: $ret_code, $output";
+	exit UNKNOWN;
+}
 print $output;
 exit "$ret_code";
