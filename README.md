@@ -47,6 +47,7 @@ For older Apache versions, try finding the user and group with:
 # usermod -a -G nagios $APACHE_USER
 ```
 
+* Another nice way to handle this issue is to use Apache's ITK MPM instead of Prefork or Worker. ITK allows you to run each Apache vhost under a different user, in which case, you could just run Nagios' vhost as the user 'nagios'.*
 
 
 ### No mail alerts are recieved
@@ -133,8 +134,20 @@ define command{
         command_line    /usr/lib/nagios/plugins/capture_plugin.pl /usr/lib/nagios/plugins/check_special_http -H '$HOSTADDRESS$' -I '$HOSTADDRESS$' -C10
 }
 
+This will help us in two ways:
+- Nagios will now show the following output instead of '(Return code of 127 is out of bounds - plugin may be missing)':
+```
+Original RC: 127, /usr/lib/nagios/plugins/check_special_http: error while loading shared libraries: libssl.so.0.9.8: cannot open shared object file: No such file or directory 
+```
+- The captured-plugins.log will have an entry with the full command so we can try to run it in the shell and debug:
+```
+ 2015-8-29 16:10:56 ------ debugging
+cmd=[/usr/lib/nagios/plugins/check_special_http '-H' 'kino.kaltura.com' '-I' 'kino.kaltura.com' '-C10']
+output=[/usr/lib/nagios/plugins/check_special_http: error while loading shared libraries: libssl.so.0.9.8: cannot open shared object file: No such file or directory
+]
+retcode=127
 
-
+```
 
 ### check_mysql plugin fails with Can't connect to MySQL server on 'mysql.host' (111) 
 - Use [capture_output.pl] (capture_output.pl) to log the command output to a file
@@ -181,12 +194,87 @@ mysql> FLUSH PRIVILEGES;
 ```
 
 ### check_disk plugin is failing with DISK CRITICAL - /run/user/1001/gvfs is not accessible: Permission denied 
+- Check the capture_plugin.log to find the full command Nagios executed
+In our example, the command is:
+```
+/usr/lib/nagios/plugins/check_disk -w 20% -c 10% -e
+```
+The check_disk plugin is part of the Nagios core plugins and is written in C, to get a better understanding of what it does, we can use the strace utility.
+From the man page:
+```
+strace - trace system calls and signals
+```
+The strace output goes into STDERR, we will therefore want to run it like so:
+```
+strace /usr/lib/nagios/plugins/check_disk -w 20% -c 10% -e 2>&1 |vim -
+```
+This command will redirect all STDERR output to STDOUT and then open VIM, telling it to display the contents of what it read from STDIN.
 
+This is useful cause VIM provides nice syntax highlighting for the strace output.
+The relevant error will be:
+```
+stat("/run/user/1001/gvfs", 0x7f03977f0090) = -1 EACCES (Permission denied)
+```
+From which we can understand that the check_disk plugin calls stat on each file and fails on /run/user/1001/gvfs.
 
+If we then try to call stat on this file manually from the shell, we'll find out that, even as root, one gets permission denied.
+It is therefore not surprising that our nagios gets it as well.
+
+Looking into what GVFS is, it is understandable why it should be this way:
+* gvfs is a userspace virtual filesystem where mounts run as separate processes which you talk to via D-Bus. It also contains a gio
+ module that seamlessly adds gvfs support to all applications using the gio API. It also supports exposing the gvfs mounts to non-gio
+ applications using fuse. *
+
+Luckily, for us, the check_disk plugin can skip this file and others like it if you pass along the following as args:
+```
+ -A -i '.gvfs'
+```
 
 
 ### SSL Certificate check shows wrong certificate
+The check we are running is:
+```
+/usr/lib/nagios/plugins/check_http -H '$HOSTADDRESS$' -I '$HOSTADDRESS$' -C10
+```
+It returns with RC 0 [OK] but prints out:
+OK - Certificate '*.mediaspace.kaltura.com' will expire on 07/22/2017 22:59. 
+However, when looking at the certificate from a browser or using curl, a different certificate is returned:
+```
+$ curl https://kino.kaltura.com -I -v
 
+* Server certificate:
+*        subject: OU=Domain Control Validated; CN=*.kaltura.com
+*        start date: 2015-08-27 12:46:41 GMT
+*        expire date: 2018-08-27 12:46:41 GMT
+*        subjectAltName: kino.kaltura.com matched
+*        issuer: C=US; ST=Arizona; L=Scottsdale; O=GoDaddy.com, Inc.; OU=http://certs.godaddy.com/repository/; CN=Go Daddy Secure Certificate Authority - G2
+```
 
+- First, lets try to figure out how the check_http plugin performs its check. Since the plugin is a precompiled binary [written in C], lets try:
+```
+$ strace /usr/lib/nagios/plugins/check_http -H kino.kaltura.com -p 443 -S -C10
+```
+Looking at the output, we can see the plugin uses the OpenSSL library to do its work:
+```
+open("/lib/x86_64-linux-gnu/libssl.so.1.0.0", O_RDONLY|O_CLOEXEC) = 3
+```
+- Therefore, lets try to use the openssl CLI client to run a similar check:
+```
+$ openssl s_client -connect kino.kaltura.com:443
+```
+Indeed, the result is similar to what the Nagios plugin gave us:
+```
+subject=/OU=Domain Control Validated/CN=*.mediaspace.kaltura.com
+issuer=/C=US/ST=Arizona/L=Scottsdale/O=GoDaddy.com, Inc./OU=http://certs.godaddy.com/repository//CN=Go Daddy Secure Certificate Authority - G2
+```
 
+Reason? SNI support is not the default for OpenSSL.
+What is SNI?
+*Server Name Indication (SNI) is an extension to the TLS computer networking protocol[1] by which a client indicates which hostname it is attempting to connect to at the start of the handshaking process.*
+That means that, when using a web server that hosts multiple domains, such as say, Apache with several VHosts, if the client does not indicate which domain it wishes to speak to, a wrong certificate may be used.
+We will therefore change our command to use SNI, like so:
+```
+/usr/lib/nagios/plugins/check_http -H kino.kaltura.com -p 443 -S -C10 --sni
+```
+which will return the desired result.
 
