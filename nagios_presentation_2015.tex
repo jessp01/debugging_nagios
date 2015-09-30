@@ -1,0 +1,232 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Beamer Presentation
+% LaTeX Template
+% Version 1.0 (10/11/12)
+%
+% This template has been downloaded from:
+% http://www.LaTeXTemplates.com
+%
+% License:
+% CC BY-NC-SA 3.0 (http://creativecommons.org/licenses/by-nc-sa/3.0/)
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%----------------------------------------------------------------------------------------
+%	PACKAGES AND THEMES
+%----------------------------------------------------------------------------------------
+
+\documentclass[aspectratio=169]{beamer}
+
+\mode<presentation> {
+
+\usetheme{Berlin}
+}
+
+\usepackage{graphicx} % Allows including images
+\usepackage{booktabs} % Allows the use of \toprule, \midrule and \bottomrule in tables
+
+%----------------------------------------------------------------------------------------
+%	TITLE PAGE
+%----------------------------------------------------------------------------------------
+
+\title[Debugging Nagios Plugins| Nagios World Conference 2015]{Debugging Nagios Plugins} % The short title appears at the bottom of every slide, the full title is only on the title page
+\author{Jess Portnoy} % Your name
+\institute[Kaltura, Inc] % Your institution as it will appear on the bottom of every slide, may be shorthand to save space
+{
+Kaltura, Inc \\ % Your institution for the title page
+\medskip
+\textit{jess.portnoy@kaltura.com} % Your email address
+}
+\date{\today} % Date, can be changed to a custom date
+
+
+\begin{document}
+
+\begin{frame}
+\titlepage % Print the title page as the first slide
+\end{frame}
+
+%\begin{frame}
+%\frametitle{Overview} % Table of contents slide, comment this block out to remove it
+%\tableofcontents % Throughout your presentation, if you choose to use \section{} and \subsection{} commands, these will automatically be printed on this slide as an overview of your presentation
+%\end{frame}
+
+%----------------------------------------------------------------------------------------
+%	PRESENTATION SLIDES
+%----------------------------------------------------------------------------------------
+
+%------------------------------------------------
+%\section{First Section} % Sections can be created in order to organize your presentation into discrete blocks, all sections and subsections are automatically printed in the table of contents as an overview of the talk
+%------------------------------------------------
+
+%------------------------------------------------
+\begin{frame}
+\frametitle{Abstract}
+This session will discuss how to debug malfunctioning plugins, show real life situations in which the plugin does not behave as expected and ways to troubleshoot and resolve the issue. \\
+\bigskip
+We will also cover some basic security best practices and the potential issues that may arise when creating a secured setup.
+\end{frame}
+
+
+\begin{frame}
+\frametitle{Common plugin failure reasons}
+There are many reasons why a plugin would malfunction but here are some very common ones:
+\begin{itemize}
+\item Wrong file system permissions
+\item Networking issues
+\item Missing dependencies
+\item A massive amount of additional weired problems
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Helpful tools}
+The following debugging tools will be covered in this presentation:
+\begin{itemize}
+\item Capture plugin
+\item strace
+\item telnet
+\item nmap
+\item netcat
+\item curl
+\item ldd
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Debugging time}
+In this demo, we will debug malfunctioning plugins and fix things so that they work correctly:) \\
+\bigskip
+The following scenarios will be inspected:
+\begin{itemize}
+\item Nagios web interface fails to load
+\item Nagios does not send mail alerts
+\item check\_mysql fails
+\item host check fails
+\item check\_http returns the wrong SSL certificate info
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}
+\frametitle{Nagios web interface fails to load}
+Upon requesting the Nagios web interface, one gets 'Internal Server Error' [HTTP 500]
+\bigskip
+\begin{itemize}
+\item Find the Nagios Apache configuration
+\item Check Apache error log for errors and hopefully, correct them:)
+\end{itemize}
+\end{frame}
+
+
+\begin{frame}
+\frametitle{Trying to reschedule test execution fails}
+Upon committing, one gets: Error: Could not stat() command file '/var/lib/nagios3/rw/nagios.cmd'!
+\bigskip
+\begin{itemize}
+\item Check which user and group Apache is running as
+\item Add the Apache user to the nagios group so that Apache can write to it
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{No mail alerts are received}
+\bigskip
+\begin{itemize}
+\item Make sure notifications are enabled for the service 
+\item Check the Nagios log to see which command is used to send  mail alerts
+\item Make sure an MTA is running
+\item Try running the command manually from the shell as the nagios user and check the MTA log for errors
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Host check fails cause ICMP is blocked}
+In many cases, this is out of your control, in such cases, the easiest thing to do is to set an alternative command for checking that the host is alive. \\
+Use the check\_command directive in your host/hostgroup definition, specifying an alternative command.
+\end{frame}
+
+\begin{frame}
+\frametitle{Capture command output}
+The capture\_output.pl script is used as a wrapper that runs the actual command, stores the STDOUT and STDERR outputs to a log file and then passes the output and RC to Nagios. \\
+If the original command's return code is bigger than 3 [UNKNOWN], 3 will be returned and the original return code will appear as part of the output.
+\end{frame}
+
+\begin{frame}
+\frametitle{'(Return code of 127 is out of bounds - plugin may be missing)'}
+Nagios can only handle 0,1,2,3 as return codes, anything else will result in the output above. \\
+To debug this, lets use the capture\_output.pl introduced in a previous slide. \\
+\bigskip
+Consider this command: \\ 
+define command\{ \\
+
+    command\_name check\_ssl\_cert\_bad \\
+    command\_line   /usr/lib/nagios/plugins/check\_special\_http -H '\$HOSTADDRESS\$' -I '\$HOSTADDRESS\$' -C10 \\
+\} 
+
+\end{frame}
+
+\begin{frame}
+\frametitle{'(Return code of 127 is out of bounds - plugin may be missing)' - cont'd}
+We will now revise the command\_line to use the capture wrapper, like so: \\ 
+\bigskip
+define command\{ \\
+    command\_name check\_ssl\_cert\_bad \\
+    command\_line   /usr/lib/nagios/plugins/capture\_plugin.pl   /usr/lib/nagios/plugins/check\_special\_http -H '\$HOSTADDRESS\$' -I '\$HOSTADDRESS\$' -C10 \\
+\}
+\end{frame}
+
+\begin{frame}
+\frametitle{'(Return code of 127 is out of bounds - plugin may be missing)' - cont'd}
+This will help us in two ways: \\
+Nagios will now show the following output instead of '(Return code of 127 is out of bounds - plugin may be missing)': \\
+\bigskip
+Original RC: 127, /usr/lib/nagios/plugins/check\_special\_http: error while loading shared libraries: libssl.so.0.9.8: cannot open shared object file: No such file or directory \\
+\bigskip
+The captured-plugins.log will have an entry with the full command so we can try to run it in the shell and debug.
+\end{frame}
+
+\begin{frame}
+\frametitle{check\_mysql plugin fails with Can't connect to MySQL server on 'mysql.host' (111)}
+\begin{itemize}
+\item Use capture\_output.pl to log the command output to a file
+\item Try running the command from the shell
+\item On the MySQL server, check what IP/network the daemon is binded with, and what port is the listener on
+\item Check mysql.user table to make sure the username and host Nagios uses is allowed
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{SSL Certificate check shows wrong certificate}
+Check returns with RC 0 (OK) and shows the certificate is has plenty time till it expires. \\ 
+However, when looking at the certificate from a browser or using curl, a different certificate is displayed. \\
+
+\begin{itemize}
+    \item Figure out how the check\_http plugin performs its check. Since the plugin is a pre-compiled binary (written in C), strace would do nicely.
+\item Use the openssl CLI client to run a similar check from the shell
+\end{itemize}
+\end{frame}
+
+
+\begin{frame}
+\frametitle{References}
+\footnotesize{
+\begin{thebibliography}{30} % Beamer does not support BibTeX so references must be inserted manually as below
+\bibitem[Capture Plugin]{p1} Nagios Capture Output Plugin - https://github.com/jessp01/debugging\_nagios/blob/master/capture\_output.pl  \\
+\bibitem[Scenarios and commands used in this session]{p1} Scenarios and commands used in this session - https://github.com/jessp01/debugging\_nagios \\ 
+\bibitem[Nmap]{p1} Nmap - https://nmap.org  \\
+\bibitem[cURL]{p1} cURL - http://curl.haxx.se  \\
+\bibitem[Nagios Exchange]{p1} Nagios Exchange - http://exchange.nagios.org \\
+\bibitem[Nagios Kaltura plugins]{p1} Nagios Kaltura plugins  - http://exchange.nagios.org/directory/Utilities/Kaltura-monitors/details \\
+\bibitem[official Nagios Plugins]{p1} The home of the official Nagios Plugins - https://nagios-plugins.org \\
+\end{thebibliography}
+}
+\end{frame}
+
+\begin{frame}
+\Huge{\centerline{The End \&\& questions}}
+\end{frame}
+
+%----------------------------------------------------------------------------------------
+
+\end{document} 
