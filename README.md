@@ -30,7 +30,7 @@ Note that unlike -DDUMP_RUN_CFG this shows the compilation defaults and not the 
 
 - Check log for errors and hopefully, correct them:)
 
-### Trying to reschedule test executation fails
+### Trying to reschedule test execution fails
 Upon committing, one gets:
 ```Error: Could not stat() command file '/var/lib/nagios3/rw/nagios.cmd'!```
 - Check which user and group Apache is running under.
@@ -250,7 +250,7 @@ $ curl https://kino.kaltura.com -I -v
 *        issuer: C=US; ST=Arizona; L=Scottsdale; O=GoDaddy.com, Inc.; OU=http://certs.godaddy.com/repository/; CN=Go Daddy Secure Certificate Authority - G2
 ```
 
-- First, lets try to figure out how the check_http plugin performs its check. Since the plugin is a precompiled binary [written in C], lets try:
+- First, lets try to figure out how the check_http plugin performs its check. Since the plugin is a pre-compiled binary [written in C], lets try:
 ```
 $ strace /usr/lib/nagios/plugins/check_http -H kino.kaltura.com -p 443 -S -C10
 ```
