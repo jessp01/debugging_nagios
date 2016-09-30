@@ -95,7 +95,7 @@ to ```/etc/postfix/generic``` and use postmap to create a proper Postfix lookup 
 ```
 Next, we need to restart Postfix:
 ```
-# service restart postfix
+# service postfix restart
 ```
 *Note that the last few commands are specific to Postfix but have parallel in other MTAs. Another alternative would have been to change the notify-service-by-email command and set the sender there but this is more global, which is usually more desirable.***
 
